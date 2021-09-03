@@ -1,0 +1,324 @@
+﻿@using System.Net.Http.Headers
+@using System.Text
+
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+
+@page "/admin"
+
+<h3>Admin</h3>
+
+@if (LoggedIn)
+{
+    <TextEdit Disabled="this.Loading" @bind-Text="@FilterText" Placeholder="Search" />
+
+    <div style="color:red;font-weight:bold;margin: 5px">
+        @_responseMsg
+    </div>
+
+    @if (this.Questions.Count == 0)
+    {
+        <div>LOADING......</div>
+    }
+    else
+    {
+        <div style="height: 50vh; max-width: 1000px; overflow-y:auto">
+            <table style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Question</th>
+                        <th>Answer</th>
+                        <th>URL Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td width="5%"></td>
+                        <td width="50%">
+                            <TextEdit Disabled="this.Loading" ElementId="newQuestionInput" @bind-Text="@NewQuestion.QuestionText" KeyUp="(key) => CheckEnterPressed(key, NewQuestion)" />
+                        </td>
+                        <td width="20%">
+                            <TextEdit Disabled="this.Loading" @bind-Text="@NewQuestion.QuestionAnswer" KeyUp="(key) => CheckEnterPressed(key, NewQuestion)" />
+                        </td>
+                        <td width="15%" colspan="2">
+                            <Blazorise.Bootstrap.Button Type="ButtonType.Button" Clicked="() => SaveChange(NewQuestion)"
+                                                        Color="Color.Primary" Style="width:100%"
+                                                        Disabled="this.Loading">
+                                Save
+                            </Blazorise.Bootstrap.Button>
+                        </td>
+                        <td width="10%">
+                        </td>
+                    </tr>
+                    <Virtualize Items="@Questions.Where(quest => ListFilter(quest)).OrderByDescending(quest => quest.Id).ToList()" Context="q">
+                        <tr @key=" q.Id">
+                            <td width="5%">@q.Id</td>
+                            <td width="50%">
+                                <TextEdit Disabled="this.Loading" Text="@q.QuestionText" TextChanged="(val) => OnTextChanged(q, InputType.Question, val)" KeyUp="(key) => CheckEnterPressed(key, q)" />
+                            </td>
+                            <td width="20%">
+                                <TextEdit Disabled="this.Loading" Text="@q.QuestionAnswer" TextChanged="(val) => OnTextChanged(q, InputType.Answer, val)" KeyUp="(key) => CheckEnterPressed(key, q)" />
+                            </td>
+                            <td width="15%">
+                                <Blazorise.Bootstrap.Button Type="ButtonType.Link" To="@($"/lost/{q.UrlCode}")" Target="Target.Blank">
+                                    @q.UrlCode
+                                </Blazorise.Bootstrap.Button>
+                            </td>
+                            <td width="10%">
+                                <Blazorise.Bootstrap.Button Type="ButtonType.Button" Clicked="() => Delete(q)"
+                                                            Color="Color.Warning" Style="width:100%"
+                                                            Disabled="this.Loading">
+                                    Delete
+                                </Blazorise.Bootstrap.Button>
+                            </td>
+                        </tr>
+                    </Virtualize>
+                </tbody>
+            </table>
+        </div>
+    }
+}
+else
+{
+    <TextEdit ElementId="passwordInput" @bind-Text="@Password" Placeholder="Password" KeyUp="CheckPassword" Disabled="this.Loading" />
+    <Blazorise.Bootstrap.Button Type="ButtonType.Button" 
+                                Clicked="Login"
+                                Color="Color.Primary"
+                                Class="main-button answer-button"
+                                Disabled="this.Loading">
+        Login
+    </Blazorise.Bootstrap.Button>
+}
+
+
+@code {
+
+    string FilterText { get; set; } = "";
+    string _responseMsg { get; set; } = "";
+    List<Question> Questions { get; set; } = new List<Question>();
+    Question NewQuestion = new Question();
+    bool LoggedIn = false;
+    string Password { get; set; } = "";
+    bool Loading { get; set; } = false;
+
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JsRuntime.InvokeVoidAsync("focusElement", "passwordInput");
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    bool ListFilter(Question quest)
+    {
+        return quest.UrlCode.ToLower().StartsWith(FilterText.ToLower())
+            || string.IsNullOrEmpty(FilterText);
+    }
+
+    enum InputType
+    {
+        Question,
+        Answer
+    }
+
+    void OnTextChanged(Question q, InputType type, string val)
+    {
+        switch (type)
+        {
+            case InputType.Question:
+                q.QuestionText = val;
+                break;
+            case InputType.Answer:
+                q.QuestionAnswer = val;
+                break;
+        }
+
+        UpdateOrAddQuestionInUI(q);
+    }
+
+    void CheckEnterPressed(KeyboardEventArgs args, Question q)
+    {
+        if (args.Code == "Enter")
+            this.SaveChange(q);
+    }
+
+    void CheckPassword(KeyboardEventArgs args)
+    {
+        if (args.Code == "Enter")
+        {
+            this.Login();
+        }
+    }
+
+    void UpdateOrAddQuestionInUI(Question q)
+    {
+        var update = this.Questions.FirstOrDefault(x => x.Id == q.Id);
+
+        if (update == null)
+        {
+            this.Questions.Add(q);
+        }
+        else
+        {
+            int index = this.Questions.IndexOf(update);
+            this.Questions[index] = q;
+        }
+
+        this.StateHasChanged();
+    }
+
+    void RemoveQuestionFromUI(Question q)
+    {
+        var remove = this.Questions.FirstOrDefault(x => x.Id == q.Id);
+
+        if (remove != null)
+        {
+            this.Questions.Remove(remove);
+            this.StateHasChanged();
+        }
+    }
+
+    async void SaveChange(Question q)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(q.QuestionText) || string.IsNullOrEmpty(q.QuestionAnswer))
+                throw new Exception("Incomplete question!");
+
+            this.Loading = true;
+            _responseMsg = "";
+
+            var request = new Helpers.HttpPostHelper<Question>("Questions/Update", q);
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"whateva:{Password}")));
+
+            BasicHttpResponse<Question> resp = await request.SendAsync<Question>(Http);
+
+            _responseMsg = resp.Message;
+
+            if (resp.Ok)
+            {
+                NewQuestion = new Question();
+                UpdateOrAddQuestionInUI(resp.Data);
+                await JsRuntime.InvokeVoidAsync("turnOffAutomplete", "newQuestionInput");
+                await JsRuntime.InvokeVoidAsync("focusElement", "newQuestionInput");
+            }
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            this.Loading = false;
+            this.StateHasChanged();
+            await JsRuntime.InvokeVoidAsync("focusElement", "newQuestionInput");
+        }
+    }
+
+    async void Login()
+    {
+        try
+        {
+
+            _responseMsg = "";
+            this.Loading = true;
+
+            var request = new Helpers.HttpPostHelper<string>("Questions/AdminLogin", "");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"whateva:{Password}")));
+
+            BasicHttpResponse<bool> resp = await request.SendAsync<bool>(Http);
+
+            _responseMsg = resp.Message;
+
+            if (resp.Ok)
+            {
+                this.LoggedIn = true;
+                this.StateHasChanged();
+                GetQuestions();
+            }
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            this.Loading = false;
+            this.StateHasChanged();
+        }
+    }
+
+    async void Delete(Question q)
+    {
+        try
+        {
+            bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Are you sure?"); // Confirm
+
+            if (!confirmed)
+                return;
+
+            this.Loading = true;
+            _responseMsg = "";
+
+            var request = new Helpers.HttpPostHelper<Question>("Questions/Delete", q);
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"whateva:{Password}")));
+
+            BasicHttpResponse<bool> resp = await request.SendAsync<bool>(Http);
+
+            _responseMsg = resp.Message;
+
+            if (resp.Ok)
+            {
+                NewQuestion = new Question();
+                RemoveQuestionFromUI(q);
+
+            }
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            this.Loading = false;
+            this.StateHasChanged();
+        }
+    }
+
+    async void GetQuestions()
+    {
+        try
+        {
+            _responseMsg = "";
+            this.Loading = true;
+
+            BasicHttpResponse<List<Question>> resp = await Http.GetFromJsonAsync<BasicHttpResponse<List<Question>>>($"Questions/GetAllQuestions");
+
+            _responseMsg = resp.Message;
+
+            if (resp.Ok)
+            {
+                Questions = resp.Data;
+            }
+            else
+                throw new Exception(resp.Message);
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            this.Loading = false;
+            this.StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,23 @@
+﻿
+@inject IJSRuntime JsRuntime
+
+@page "/"
+
+
+<div style="text-align:center">
+
+    <h2>GOOD LUCK, WORM</h2>
+
+    <Blazorise.Bootstrap.Button Type="ButtonType.Link" To="/lost" Class="main-button answer-button" Clicked="BeginClicked">
+        BEGIN
+    </Blazorise.Bootstrap.Button>
+</div>
+
+@code{
+    async void BeginClicked()
+    {
+        await JsRuntime.InvokeVoidAsync("playLaugh");
+        await JsRuntime.InvokeVoidAsync("playGreensleeves");
+    }
+}
+

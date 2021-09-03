@@ -1,0 +1,81 @@
+﻿
+@inherits LayoutComponentBase
+@inject IJSRuntime JsRuntime
+
+<Layout>
+    <LayoutHeader Fixed="true" Class="layout-header">
+        <Blazorise.Bootstrap.Button Type="ButtonType.Link" To="/" Class="hover-pointer">Lost in Cryptic</Blazorise.Bootstrap.Button>
+        <Blazorise.Bootstrap.Button Type="ButtonType.Link" Class="hover-pointer" Clicked="ToggleSound">@soundButtonText</Blazorise.Bootstrap.Button>
+    </LayoutHeader>
+    <LayoutContent Class="main-layout">
+        <div style="text-align: center; max-width: 325px; margin: 20px auto; height: auto;transform:translate(@(TranslateX)px, @(TranslateY)px)">
+            <img class="loading-icon img-fluid" src="/images/evil-face-centre.png" />
+        </div>
+        <div class="main-container center" id="main-container">
+            @Body
+        </div>
+    </LayoutContent>
+    <LayoutFooter Fixed="true" Class="layout-footer">
+        Lost In Cryptic @DateTime.Now.Year
+    </LayoutFooter>
+</Layout>
+
+@code{
+
+    int Scale = 1;
+    int TranslateX = 0;
+    int TranslateY = 0;
+    private static Action<MouseMoveData> onMouseMoveAction;
+    bool playSound = true;
+    string soundButtonText => playSound ? "Sound 🔈" : "Sound 🔇";
+
+    protected override void OnInitialized()
+    {
+        onMouseMoveAction = MouseMoved;
+    }
+
+    async void ToggleSound()
+    {
+        this.playSound = await JsRuntime.InvokeAsync<bool>("toggleSound");
+
+        this.StateHasChanged();
+    }
+
+    [JSInvokable]
+    public static void OnMouseMove(int xPos, int yPos, float pageWidth, float pageHeight)
+    {
+        onMouseMoveAction.Invoke(new MouseMoveData
+        {
+            PosX = xPos,
+            PosY = yPos,
+            PageHeight = pageHeight,
+            PageWidth = pageWidth
+        });
+    }
+
+    void MouseMoved(MouseMoveData data)
+    {
+        // Shift so positions are based around centre of screen
+        data.PosX = data.PosX - (int)(data.PageWidth / 2);
+        data.PosY = data.PosY - (int)(data.PageHeight / 2);
+
+        int maxTranslateX = (int)(data.PageWidth / 20);
+        int maxTranslateY = (int)(data.PageHeight / 20);
+
+        double xPercent = Math.Abs(data.PosX / (data.PageWidth / 2));
+        double yPercent = Math.Abs(data.PosY / (data.PageHeight / 2));
+
+        this.TranslateX = (int)(maxTranslateX * xPercent * Math.Sign(data.PosX));
+        this.TranslateY = (int)(maxTranslateY * yPercent * Math.Sign(data.PosY));
+
+        this.StateHasChanged();
+    }
+
+    public class MouseMoveData
+    {
+        public int PosX { get; set; }
+        public int PosY { get; set; }
+        public float PageWidth { get; set; }
+        public float PageHeight { get; set; }
+    }
+}

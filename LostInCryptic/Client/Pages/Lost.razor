@@ -1,0 +1,204 @@
+﻿
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+@using LostInCryptic.Shared.Constants
+
+@page "/lost"
+@page "/lost/{UrlCode}"
+
+<div>
+    <div class="question-container">
+
+        @if (!quizComplete)
+        {
+            <h4 class="question-text">@Question.QuestionText</h4>
+
+            <div class="answer-input">
+                <TextEdit ElementId="answerInput" Disabled="this.Loading" @bind-Text="@Question.QuestionAnswer"
+                          Placeholder="Give me your answer"
+                          KeyUp="OnKeyUp" />
+            </div>
+
+            <Blazorise.Bootstrap.Button Disabled="this.Loading"
+                                        Class="main-button answer-button"
+                                        Clicked="@SubmitAnswer">
+                I WILL TRY
+            </Blazorise.Bootstrap.Button>
+
+            <div style="color:red">@_responseMsg</div>
+
+            <div style="height:80px;">
+                @if (this.Loading)
+                {
+                    <LostInCryptic.Client.Components.LoadingIcon Width="80" />
+                }
+                @if (this.questionWrong)
+                {
+                    <div class="question-wrong-text">
+                        WRONG
+                    </div>
+                }
+            </div>
+
+            <div class="question-url hover-pointer" @onclick="() => CopyUrlText()">
+                @pageUrl
+            </div>
+
+        }
+        else
+        {
+            <div style="height:80px;">
+                <div class="question-wrong-text">
+                    YOU HAVE DEFEATED ME!
+                </div>
+            </div>
+            @*<div class="question-url hover-pointer" @onclick="() => CopyUrlText()">
+                @pageUrl
+            </div>*@
+        }
+
+
+    </div>
+</div>
+
+@code {
+
+    Question Question = new Question();
+    string _responseMsg = "";
+    bool Loading = true;
+    string textCopiedResponse = "";
+    bool questionWrong = false;
+    bool quizComplete = false;
+    string pageUrl => string.IsNullOrEmpty(Question.UrlCode)
+        ? ""
+        : (string.IsNullOrEmpty(textCopiedResponse)  ? $"Level {Question.Number} Code: {Question.UrlCode} (click to copy URL)" : textCopiedResponse);
+
+
+
+    [Parameter]
+    public string UrlCode { get; set; } = null;
+
+    async void OnKeyUp(KeyboardEventArgs e)
+    {
+        await JsRuntime.InvokeVoidAsync("playGreensleeves");
+
+        if (e.Code == "Enter")
+            SubmitAnswer();
+    }
+
+    async Task CopyUrlText()
+    {
+        await JsRuntime.InvokeVoidAsync("copyText", $"{Constants.BaseUrl}/lost/{UrlCode}");
+
+        textCopiedResponse = " -- Copied! --";
+        this.StateHasChanged();
+
+        await Task.Delay(3000);
+
+        textCopiedResponse = "";
+        this.StateHasChanged();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Task.Yield();
+        await GetQuestion(this.UrlCode);
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task GetQuestion(string urlCode)
+    {
+        try
+        {
+            this.quizComplete = false;
+            this.Loading = true;
+            _responseMsg = "";
+
+            BasicHttpResponse<Question> resp = await Http.GetFromJsonAsync<BasicHttpResponse<Question>>($"Questions/GetQuestion/{(string.IsNullOrEmpty(urlCode) ? "null" : urlCode)}");
+
+            _responseMsg = resp.Message;
+
+            if (resp.Ok)
+            {
+                Question = resp.Data;
+                this.Loading = false;
+                this.StateHasChanged();
+                await JsRuntime.InvokeVoidAsync("turnOffAutomplete", "answerInput");
+                await JsRuntime.InvokeVoidAsync("focusElement", "answerInput");
+                await JsRuntime.InvokeVoidAsync("setTitle", $"Lost in Cryptic: {Question.UrlCode}");
+            }
+            else
+                throw new Exception(resp.Message);
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            this.Loading = false;
+            this.StateHasChanged();
+
+        }
+    }
+
+    async void SubmitAnswer()
+    {
+        bool navigating = false;
+        try
+        {
+            if (string.IsNullOrEmpty(Question.QuestionAnswer))
+                return;
+
+            if(Question.QuestionAnswer.ToLower() == "admin")
+            {
+                NavigationManager.NavigateTo($"/admin");
+                return;
+            }
+
+            this.questionWrong = false;
+            this.Loading = true;
+            _responseMsg = "";
+
+            BasicHttpResponse<Question> resp = await Http.GetFromJsonAsync<BasicHttpResponse<Question>>($"Questions/AnswerQuestion/{Question.UrlCode}/{Question.QuestionAnswer}");
+
+            if (resp.Ok && resp.Data != null && resp.Data.UrlCode != Question.UrlCode)
+            {
+                await JsRuntime.InvokeVoidAsync("playGong");
+                navigating = true;
+                this.Loading = false;
+                this.StateHasChanged();
+                NavigationManager.NavigateTo($"/lost/{resp.Data.UrlCode}");
+            }
+            else if (resp.Ok && resp.Message == "Try again!")
+            {
+                this.questionWrong = true;
+                await JsRuntime.InvokeVoidAsync("playLaugh");
+
+            }
+            else if (resp.Ok && resp.Data == null)
+            {
+                this.quizComplete = true;
+                await JsRuntime.InvokeVoidAsync("playLaugh");
+            }
+            else
+                throw new Exception(resp.Message);
+        }
+        catch (Exception e)
+        {
+            _responseMsg = e.Message;
+        }
+        finally
+        {
+            if (!navigating)
+            {
+                this.Loading = false;
+                this.StateHasChanged();
+
+                if(!this.quizComplete)
+                    await JsRuntime.InvokeVoidAsync("focusElement", "answerInput");
+            }
+        }
+    }
+}
