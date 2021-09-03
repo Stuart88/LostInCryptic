@@ -26,8 +26,8 @@
     <!-- For Facebook / LinkedIn -->
     <meta property="og:title" content="Lost in Cryptic" />
     <meta property="og:description" content="GOOD LUCK, WORM" />
-    <meta property="og:url" content="https://lost-in-cryptic.stuart-aitken.co.uk/" />
-    <meta property="og:image" content="https://lost-in-cryptic.stuart-aitken.co.uk/images/evil-face-centre.png" />
+    <meta property="og:url" content="https://cryptic.u-mod.club/" />
+    <meta property="og:image" content="https://cryptic.u-mod.club/images/evil-face-centre.png" />
 </head>
 
 <body style="background: #505050">
@@ -83,7 +83,21 @@
             if (element)
                 element.focus();
         }
+        window.focusoutElement = function (id) {
+            var element = document.getElementById(id);
+            if (element)
+                element.blur();
+        }
+        window.focusoutAll = function () {
+            var inputs = document.getElementsByTagName('input');
 
+            if (!inputs)
+                return;
+
+            for (var i = 0; i < inputs.length; i++) {
+                inputs[i].blur();
+            }
+        }
         window.copyText = function (text) {
             console.log(`Copying: ${text}`);
             navigator.clipboard.writeText(text);

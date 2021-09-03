@@ -111,6 +111,7 @@
     {
         try
         {
+            await JsRuntime.InvokeVoidAsync("focusoutAll");
             this.quizComplete = false;
             this.Loading = true;
             _responseMsg = "";
@@ -146,10 +147,13 @@
     async void SubmitAnswer()
     {
         bool navigating = false;
+        
         try
         {
             if (string.IsNullOrEmpty(Question.QuestionAnswer))
                 return;
+
+            await JsRuntime.InvokeVoidAsync("focusoutAll");
 
             if(Question.QuestionAnswer.ToLower() == "admin")
             {
@@ -160,6 +164,7 @@
             this.questionWrong = false;
             this.Loading = true;
             _responseMsg = "";
+            this.StateHasChanged();
 
             BasicHttpResponse<Question> resp = await Http.GetFromJsonAsync<BasicHttpResponse<Question>>($"Questions/AnswerQuestion/{Question.UrlCode}/{Question.QuestionAnswer}");
 
