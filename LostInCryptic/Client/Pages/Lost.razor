@@ -2,6 +2,8 @@
 @inject HttpClient Http
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JsRuntime
+@inject IAnalytics Analytics
+
 @using LostInCryptic.Shared.Constants
 
 @page "/lost"
@@ -54,8 +56,8 @@
                 </div>
             </div>
             @*<div class="question-url hover-pointer" @onclick="() => CopyUrlText()">
-                @pageUrl
-            </div>*@
+                    @pageUrl
+                </div>*@
         }
 
 
@@ -72,7 +74,7 @@
     bool quizComplete = false;
     string pageUrl => string.IsNullOrEmpty(Question.UrlCode)
         ? ""
-        : (string.IsNullOrEmpty(textCopiedResponse)  ? $"Level {Question.Number} Code: {Question.UrlCode} (click to copy URL)" : textCopiedResponse);
+        : (string.IsNullOrEmpty(textCopiedResponse) ? $"Level {Question.Number} Code: {Question.UrlCode} (click to copy URL)" : textCopiedResponse);
 
 
 
@@ -127,7 +129,7 @@
                 this.StateHasChanged();
                 await JsRuntime.InvokeVoidAsync("turnOffAutomplete", "answerInput");
                 await JsRuntime.InvokeVoidAsync("focusElement", "answerInput");
-                await JsRuntime.InvokeVoidAsync("setTitle", $"Lost in Cryptic: {Question.UrlCode}");
+                await JsRuntime.InvokeVoidAsync("setTitle", $"Lost in Cryptic: {Question.Number}. {Question.UrlCode}");
             }
             else
                 throw new Exception(resp.Message);
@@ -147,7 +149,7 @@
     async void SubmitAnswer()
     {
         bool navigating = false;
-        
+
         try
         {
             if (string.IsNullOrEmpty(Question.QuestionAnswer))
@@ -155,7 +157,7 @@
 
             await JsRuntime.InvokeVoidAsync("focusoutAll");
 
-            if(Question.QuestionAnswer.ToLower() == "admin")
+            if (Question.QuestionAnswer.ToLower() == "admin")
             {
                 NavigationManager.NavigateTo($"/admin");
                 return;
@@ -165,6 +167,8 @@
             this.Loading = true;
             _responseMsg = "";
             this.StateHasChanged();
+
+            Analytics.TrackEvent("Answer", new { question = $"{Question.Number}. {Question.UrlCode}", answer = Question.QuestionAnswer });
 
             BasicHttpResponse<Question> resp = await Http.GetFromJsonAsync<BasicHttpResponse<Question>>($"Questions/AnswerQuestion/{Question.UrlCode}/{Question.QuestionAnswer}");
 
@@ -186,6 +190,7 @@
             {
                 this.quizComplete = true;
                 await JsRuntime.InvokeVoidAsync("playLaugh");
+                Analytics.TrackEvent("Finished", new { question = $"{Question.Number}. {Question.UrlCode}" });
             }
             else
                 throw new Exception(resp.Message);
@@ -201,7 +206,7 @@
                 this.Loading = false;
                 this.StateHasChanged();
 
-                if(!this.quizComplete)
+                if (!this.quizComplete)
                     await JsRuntime.InvokeVoidAsync("focusElement", "answerInput");
             }
         }

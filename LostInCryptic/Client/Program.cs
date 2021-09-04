@@ -30,7 +30,7 @@ namespace LostInCryptic.Client
                      })
                      .AddBootstrapProviders()
                      .AddFontAwesomeIcons()
-                     .AddGoogleAnalytics("YOUR_GTAG_ID");
+                     .AddGoogleAnalytics("G-1KTB6298K9");
             
             await builder.Build().RunAsync();
         }

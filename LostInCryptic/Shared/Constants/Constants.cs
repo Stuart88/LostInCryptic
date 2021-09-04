@@ -11,7 +11,7 @@ namespace LostInCryptic.Shared.Constants
 #if DEBUG
         public static string BaseUrl = "https://localhost:44382";
 #else
-        public static string BaseUrl = "https://lost-in-cryptic.stuart-aitken.co.uk";
+        public static string BaseUrl = "https://cryptic.u-mod.club";
 #endif
     }
 }
